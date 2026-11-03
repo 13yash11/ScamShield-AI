@@ -675,7 +675,7 @@ Expect JSON with `status: "ok"`. The configuration flags indicate presence only.
 5. Refresh `/history` directly: React Router should still load.
 6. Sign out and confirm private history is unavailable.
 
-**Live Vercel deployment has not been performed or verified by this implementation.** The connected Supabase project has now been migrated and its database checks passed, but there is no connected Vercel deployment for verification. The deployment checks above are still required; database/local tests do not establish deployed API health.
+**Production is deployed and verified:** [ScamShield AI](https://scamshield-ai-murex.vercel.app). The connected GitHub repository is `13yash11/ScamShield-AI`, with `master` as the production branch. Pushes to that branch trigger Vercel builds. Supabase remains the existing hosted database/Auth service.
 
 ### Common deployment problems
 
@@ -735,7 +735,7 @@ The implemented phases and actual checks are recorded in [Verification and remai
 
 ## Verification and remaining work
 
-The application checks below were recorded on November 2, 2026.
+The initial application checks below were recorded on November 2, 2026. The live deployment checks are recorded separately under November 3, 2026.
 
 Verified in this workspace with Python 3.12.14 and Node.js 24.15.0.
 
@@ -840,3 +840,31 @@ Verified after moving the files:
 - Both local `.env` files and the Python environment remain ignored. No server credentials were present in frontend configuration, examples, or the compiled frontend. Local documentation links and Git whitespace checks passed.
 
 The existing UI components, detection behavior, and hosted database schema were preserved. Live Vercel deployment remains unverified. Current start commands are in [Overview and quick start](#overview-and-quick-start).
+
+### Live Vercel deployment — November 3, 2026
+
+The frontend and Python API are live together at [ScamShield AI](https://scamshield-ai-murex.vercel.app). Vercel project `scamshield-ai` is connected to `https://github.com/13yash11/ScamShield-AI`, production branch `master`, under the existing Hobby account. No paid services or new database projects were enabled.
+
+The first cloud build exposed a nested requirements include that Vercel could not parse. Root `requirements.txt` now lists the same runtime pins as `backend/requirements.txt`; keep these two manifests synchronized. Node is pinned to `24.x` in the project and workspace manifests to match the tested runtime. Package versions, UI components, and detection algorithms were preserved. The corrected application deployment was built from commit `fc04f1e`.
+
+Production variables are configured in Vercel. Supabase and Gemini key values are stored as Secrets and remain outside Git and browser bundles. The production `APP_ORIGIN` and `CORS_ORIGINS` are both `https://scamshield-ai-murex.vercel.app`. Preview credentials were not provisioned. The upload check included the required frontend/backend sources and excluded local credentials, caches, virtual environments, and tooling.
+
+Live checks completed:
+
+| Check | Result |
+| --- | --- |
+| Homepage and scanner page | HTTP 200 application HTML |
+| `/api/health` | HTTP 200; Supabase and Gemini configured |
+| Unknown API route | JSON HTTP 404 |
+| Unauthenticated scan history | JSON HTTP 401 |
+| Synthetic text scan through the deployed API | HTTP 200; Critical, score 100; `HYBRID_GEMINI_RULES`; `aiUsed:true`; no fallback |
+| Guest persistence | `saved:false`; no scan history written |
+| Untrusted Origin | HTTP 403 before analysis |
+| Existing Supabase Auth public settings | HTTP 200; email sign-in/signup enabled; email confirmation required |
+
+The user confirmed saving the production Supabase URL Configuration:
+
+- Site URL: `https://scamshield-ai-murex.vercel.app/login`
+- Allowed redirects: `https://scamshield-ai-murex.vercel.app/login` and `https://scamshield-ai-murex.vercel.app/reset-password`, keeping the existing localhost entries.
+
+The connected Supabase tools do not expose Auth URL configuration, so that dashboard change was confirmed by the user rather than read back through the tools. A real-user password sign-in, saved-history round trip, and email confirmation/reset delivery were not replayed by the deployment checks. The earlier pending phone verification, optional notification delivery, and placeholder policy links remain as recorded above.
