@@ -19,3 +19,7 @@ backend/.ruff_cache/
 backend/tests/
 frontend/screenshots/
 *.zip
+
+# Exclude local tooling directory entries as well as their contents.
+.tools
+.cache
