@@ -61,10 +61,8 @@ def build_result(scan_type: str, target: str, rules: RuleAssessment, ai: AIOutco
 
 
 async def privacy_settings(
-    db: SupabaseService, auth: AuthenticatedUser | None
+    db: SupabaseService, auth: AuthenticatedUser
 ) -> PrivacyPreferences:
-    if auth is None:
-        return PrivacyPreferences(save_history=False)
     rows = await db.table(
         "GET",
         "user_settings",
@@ -82,10 +80,10 @@ async def save_result(
     result: ScanResult,
     original: str,
     privacy: PrivacyPreferences,
-    auth: AuthenticatedUser | None,
+    auth: AuthenticatedUser,
     db: SupabaseService,
 ) -> ScanResult:
-    if not auth or not privacy.save_history:
+    if not privacy.save_history:
         return result
     row = result.model_dump(mode="json", exclude={"target", "saved", "persistence_error"})
     row.update(

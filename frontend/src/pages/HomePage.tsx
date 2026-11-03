@@ -107,7 +107,7 @@ export const HomePage: React.FC = () => {
             </span>
             <span className="flex items-center gap-1.5 font-medium">
               <CheckCircle className="w-4 h-4 text-brand" />
-              No Account Required for Basic Scans
+              Sign In Required for Scans
             </span>
             <span className="flex items-center gap-1.5 font-medium">
               <CheckCircle className="w-4 h-4 text-brand" />

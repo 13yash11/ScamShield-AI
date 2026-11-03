@@ -299,7 +299,7 @@ Open `http://localhost:8000/api/health` for API liveness and configuration prese
 5. Change profile/privacy settings and try scanning with history/AI disabled.
 6. Promote a test account through the trusted SQL procedure in the Supabase guide to test Admin.
 
-Basic text/URL scans also work without an account. If Gemini is unavailable they use clearly marked rules. Guest results are passed in browser navigation state and are not written to account history. Signed-in scans are automatically saved only when history is enabled; the Results page reports storage failures.
+All text, URL, and screenshot scans require sign-in with a confirmed account and an active Supabase session. Opening `/scan` or `/results` while signed out redirects to the login page. After successful login, the user returns to the requested scanner. If Gemini is unavailable, text/URL scans use clearly marked rules. Scans are saved only when history is enabled; the Results page reports storage failures.
 
 ### Automated verification
 
@@ -407,7 +407,7 @@ The application has no self-promotion API. Client-provided roles and `user_metad
 
 ### Data and privacy
 
-- Guest scans are not written to the database.
+- Every scan requires an active authenticated session. Signed-out, invalid, and revoked sessions receive HTTP 401 before analysis or persistence.
 - History starts enabled; storing a message excerpt starts disabled. Default `content_reference` is a short hash reference, not the submitted text.
 - If enabled, stored text/URL excerpts are best-effort redacted and limited to 2,000 characters. Assessment explanations may contain contextual content; remove personal data before scanning.
 - Screenshots and their extracted text are never stored as files or raw transcripts by this app.
@@ -460,7 +460,7 @@ Submitted text, visible URLs, and instructions inside screenshots are treated as
 
 Google's [unpaid-service terms](https://ai.google.dev/gemini-api/terms) describe how free-tier inputs/outputs may be used to improve its services and reviewed by people. Do not submit sensitive or personal information. Redaction cannot recognize every possible secret; crop or redact screenshots yourself and use synthetic/redacted examples for demonstrations.
 
-Signed-in users can disable AI in Account Settings and use rules for text/URLs. Screenshot analysis then returns a clear error asking for AI to be enabled or text to be pasted. Guest users see the content-sharing notice on the scanner. The application does not control Google's retention policies.
+Signed-in users can disable AI in Account Settings and use rules for text/URLs. Screenshot analysis then returns a clear error asking for AI to be enabled or text to be pasted. The scanner displays the content-sharing notice before authenticated submissions. The application does not control Google's retention policies.
 
 ### Failure behavior
 
@@ -523,7 +523,7 @@ Full names are 2–100 characters, email is validated, passwords are 12–128 ch
 | `POST /scan/url` | JSON `{url}`; up to 2,048 characters. Missing scheme defaults to HTTPS. HTTP(S) only. |
 | `POST /scan/file` | `multipart/form-data`, field `file`: PNG/JPEG/WebP, at most 3 MB, 16 megapixels, one frame. Actual image bytes are validated. |
 
-Basic scans are public. Authenticated scans load privacy preferences and optionally persist the result. Invalid/expired authentication is not silently downgraded to guest analysis when a session is supplied.
+All three scan endpoints require authentication using the existing verified Supabase session. They load the signed-in user's privacy preferences and optionally persist the result. Missing, invalid, expired, and revoked sessions receive HTTP 401 before rules, AI calls, or screenshot decoding. Disabling history does not remove the sign-in requirement.
 
 Every successful scan returns:
 
@@ -564,7 +564,7 @@ If text/URL AI fails, `aiUsed` is false and the fallback reason/method is explic
 | `DELETE /scans` | Delete all caller-owned scan history; 204. |
 | `POST /scans/{id}/report` | `{description}` (10–2,000 characters), owned saved scan required → 201 `{success,message}`. |
 
-Guest results are not saveable after the fact: sign in and enable history **before** scanning. Screenshots are never retained. Default saved targets are hash references; users can opt into redacted excerpts.
+Enable history **before** scanning to retain an authenticated result. Results generated with history disabled are not saved after the fact. Screenshots are never retained. Default saved targets are hash references; users can opt into redacted excerpts.
 
 ### Settings (authenticated)
 
@@ -706,7 +706,7 @@ Authentication uses Supabase Auth and server-issued HTTP-only cookies. The old l
 
 Text/URL/file scan endpoint names and camelCase result fields are preserved. Risk levels include `CRITICAL`. Results also identify whether AI ran, whether fallback was used, and whether history was actually saved.
 
-Dashboard, history, settings, administrator users/metrics/reports, password recovery, and report submission call the real APIs. No fake records or statistics are supplied when services are unavailable. Guest scans are not saved; signed-in scans follow privacy preferences.
+Dashboard, history, settings, administrator users/metrics/reports, password recovery, and report submission call the real APIs. No fake records or statistics are supplied when services are unavailable. All scanning requires sign-in and follows the user's privacy preferences.
 
 The connected ScamShield-AI Supabase project now has migration `20261102063353_initial_scamshield_backend` applied. Its existing confirmed account was backfilled with profile/settings records, and live database session/access checks passed. Do not apply the initial migration again to that project. Live Gemini structured text analysis is also verified after correcting its JSON Schema request format. A Vercel deployment still needs verification; see the setup guides.
 
@@ -717,7 +717,7 @@ The existing React/Vite components, styling, navigation, and request/response na
 1. Add FastAPI configuration, health, validation, request limits, and serverless entrypoint.
 2. Add Supabase SQL migrations, RLS, protected roles, real Auth sessions, profile/settings APIs.
 3. Add explainable rules, passive URL inspection, Gemini structured analysis, validated image uploads, and honest fallbacks.
-4. Connect existing dashboard, history, settings, and admin components. Preserve public basic scans. Remove browser-only history and token storage.
+4. Connect existing dashboard, history, settings, and admin components. Require authentication before every scan. Remove browser-only history and token storage.
 5. Add mocked backend/integration tests and Vercel routing. Check authorization, database failures, and image/AI failures.
 6. Run Python tests, frontend tests/build, local health checks, and document account/database/deployment setup.
 
@@ -727,7 +727,7 @@ The existing React/Vite components, styling, navigation, and request/response na
 - Supabase Auth owns passwords; no custom password table or service-role key is needed by the application. All database calls use the caller's JWT and RLS.
 - HTTP-only, SameSite cookies hold access/refresh tokens. Require trusted origins for cookie-authenticated writes. The React client refreshes once after a 401. Support modules live in `backend/api/_app/` so Vercel discovers only one function.
 - Email confirmation is supported. Phone numbers are unverified contact data; phone login is pending an approved ownership-verification mechanism.
-- Public scans are not saved. Authenticated scans follow privacy settings and save redacted references/assessment fields, never screenshots.
+- All scans require an active authenticated session. Privacy settings control whether redacted references/assessment fields are saved; screenshots are never retained.
 - URLs are parsed, never fetched. No live reputation, redirect, or statistical-probability claims.
 - The user connected Supabase after initial implementation. The application migration is now applied to the existing ScamShield-AI project, with profile/settings backfill and live session/access checks verified. A live Gemini structured text response has also been verified after correcting its request schema. Vercel deployment remains unverified; automated tests mock external APIs.
 
@@ -868,3 +868,11 @@ The user confirmed saving the production Supabase URL Configuration:
 - Allowed redirects: `https://scamshield-ai-murex.vercel.app/login` and `https://scamshield-ai-murex.vercel.app/reset-password`, keeping the existing localhost entries.
 
 The connected Supabase tools do not expose Auth URL configuration, so that dashboard change was confirmed by the user rather than read back through the tools. A real-user password sign-in, saved-history round trip, and email confirmation/reset delivery were not replayed by the deployment checks. The earlier pending phone verification, optional notification delivery, and placeholder policy links remain as recorded above.
+
+### Sign-in required for every scan — November 3, 2026
+
+All text, URL, and screenshot analysis now requires a confirmed account and an active Supabase session. The scanner and results routes redirect signed-out visitors to sign-in. A successful sign-in returns the user to the requested scanner. The three scan APIs return HTTP 401 for missing, invalid, expired, or revoked sessions before analysis, image decoding, or persistence. This replaces the guest-scan behavior recorded in the earlier deployment checks above.
+
+The existing session validation, privacy preferences, Gemini/rules behavior, risk scoring, and database schema remain in use. Saving history can still be disabled for an authenticated scan. No database migration is required.
+
+Verification for this change: 79 backend tests passed, including nine rejection cases across all three scan types and a login-cookie-to-saved-scan test; 21 frontend tests passed, including scanner/results protection and return-to-scanner navigation after login. Python lint and the TypeScript/Vite production build passed. External Auth and AI services are mocked in the automated suite.

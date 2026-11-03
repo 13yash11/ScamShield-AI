@@ -19,7 +19,7 @@ export const ResultsPage: React.FC = () => {
   const [isReporting, setIsReporting] = useState(false);
 
   useEffect(() => {
-    // Keep guest results in navigation memory only.
+    // Keep results in browser navigation state.
     const stateResult = (location.state as { result?: ScanResult })?.result;
     if (stateResult) {
       setResult(stateResult);
@@ -85,7 +85,7 @@ export const ResultsPage: React.FC = () => {
         isSaved={Boolean(result.saved)}
       />
       {result.persistenceError && <FormError message={result.persistenceError} className="mt-4" />}
-      <p className="text-xs text-text-secondary mt-4">{result.saved ? 'This assessment is saved in your account history.' : 'This assessment was not saved. Sign in and enable scan history before scanning to keep a record.'}</p>
+      <p className="text-xs text-text-secondary mt-4">{result.saved ? 'This assessment is saved in your account history.' : 'This assessment was not saved. Enable scan history before running a new scan to keep a record.'}</p>
       {result.saved && (
         <form onSubmit={handleReport} className="mt-6 p-5 bg-white border border-border rounded-lg space-y-3">
           <label htmlFor="report-description" className="text-sm font-semibold text-text-primary block">Submit a scam report for review</label>

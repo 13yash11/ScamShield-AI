@@ -259,7 +259,7 @@ export const ScannerPage: React.FC = () => {
         <div className="p-4 bg-background-secondary/60 border-t border-border rounded-b-lg flex items-start gap-3 text-xs text-text-secondary">
           <AlertCircle className="w-4 h-4 text-brand shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            Remove personal details before submitting. AI-enabled scans send content to Google Gemini. Screenshots are not retained by this app. Signed-in scans follow your privacy settings; guest scans are not saved.
+            Remove personal details before submitting. AI-enabled scans send content to Google Gemini. Screenshots are not retained by this app. Scans require sign-in and follow your privacy settings.
           </p>
         </div>
       </div>

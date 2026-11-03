@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from ..core.config import Settings, get_settings
-from ..core.security import AuthenticatedUser, optional_user
+from ..core.security import AuthenticatedUser, current_user
 from ..schemas.results import ScanResult
 from ..schemas.scan import TextScanRequest, UrlScanRequest
 from ..services.gemini_service import AIOutcome, GeminiService
@@ -25,7 +25,7 @@ def get_gemini(settings: Settings = Depends(get_settings)) -> GeminiService:
 @router.post("/text", response_model=ScanResult)
 async def scan_text(
     body: TextScanRequest,
-    auth: AuthenticatedUser | None = Depends(optional_user),
+    auth: AuthenticatedUser = Depends(current_user),
     db: SupabaseService = Depends(get_supabase),
     gemini: GeminiService = Depends(get_gemini),
 ):
@@ -43,7 +43,7 @@ async def scan_text(
 @router.post("/url", response_model=ScanResult)
 async def scan_url(
     body: UrlScanRequest,
-    auth: AuthenticatedUser | None = Depends(optional_user),
+    auth: AuthenticatedUser = Depends(current_user),
     db: SupabaseService = Depends(get_supabase),
     gemini: GeminiService = Depends(get_gemini),
 ):
@@ -91,7 +91,7 @@ def validate_image(data: bytes) -> str:
 @router.post("/file", response_model=ScanResult)
 async def scan_file(
     file: UploadFile = File(...),
-    auth: AuthenticatedUser | None = Depends(optional_user),
+    auth: AuthenticatedUser = Depends(current_user),
     db: SupabaseService = Depends(get_supabase),
     gemini: GeminiService = Depends(get_gemini),
     settings: Settings = Depends(get_settings),

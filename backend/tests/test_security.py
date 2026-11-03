@@ -36,15 +36,15 @@ def test_rejects_wildcard_cors_and_insecure_production():
         Settings(_env_file=None, app_env="production", app_origin="http://localhost:5173")
 
 
-def test_rate_limit_is_enforced(client):
+def test_rate_limit_is_enforced(signed_in):
     for _ in range(10):
         assert (
-            client.post(
+            signed_in.post(
                 "/api/v1/scan/text", json={"text": "Ordinary message for a bounded test."}
             ).status_code
             == 200
         )
-    response = client.post("/api/v1/scan/text", json={"text": "Another message after the limit."})
+    response = signed_in.post("/api/v1/scan/text", json={"text": "Another message after the limit."})
     assert response.status_code == 429
     assert response.headers["retry-after"] == "60"
 

@@ -86,18 +86,6 @@ async def resolve_user(token: str, db: SupabaseService) -> AuthenticatedUser:
     return AuthenticatedUser(User.model_validate(profile), token)
 
 
-async def optional_user(
-    request: Request, db: SupabaseService = Depends(get_supabase)
-) -> AuthenticatedUser | None:
-    token = read_token(request)
-    if token:
-        return await resolve_user(token, db)
-    # An expired access cookie must not silently turn a signed-in scan into a guest scan.
-    if request.headers.get("X-ScamShield-Session") == "active":
-        raise HTTPException(401, "Your session has expired. Please sign in again.")
-    return None
-
-
 async def current_user(
     request: Request, db: SupabaseService = Depends(get_supabase)
 ) -> AuthenticatedUser:

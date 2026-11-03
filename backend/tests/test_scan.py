@@ -20,15 +20,60 @@ def image_bytes(format="PNG"):
     return output.getvalue()
 
 
-def test_text_scan_falls_back_without_ai_and_guest_is_not_saved(client):
+@pytest.mark.parametrize("session", ["missing", "invalid", "revoked"])
+@pytest.mark.parametrize("scan_type", ["text", "url", "file"])
+def test_all_scan_types_require_an_active_session(client, provider, monkeypatch, session, scan_type):
+    class UnexpectedAI:
+        async def analyze(self, *_args):
+            pytest.fail("AI must not receive an unauthenticated submission")
+
+    def unexpected_image_decode(_data):
+        pytest.fail("Unauthenticated screenshots must not be decoded")
+
+    client.app.dependency_overrides[get_gemini] = lambda: UnexpectedAI()
+    monkeypatch.setattr("backend.api._app.routes.scan.validate_image", unexpected_image_decode)
+    if session == "invalid":
+        client.headers["Authorization"] = "Bearer expired-or-invalid-session"
+    elif session == "revoked":
+        client.headers["Authorization"] = f"Bearer {provider.token}"
+        provider.revoked = True
+    if scan_type == "file":
+        response = client.post(
+            "/api/v1/scan/file", files={"file": ("screen.png", image_bytes(), "image/png")}
+        )
+    else:
+        payload = {"text": "A synthetic message requesting an OTP."} if scan_type == "text" else {"url": "https://example.com"}
+        response = client.post(f"/api/v1/scan/{scan_type}", json=payload)
+    assert response.status_code == 401
+    assert "riskScore" not in response.json()
+    assert not provider.scans
+
+
+def test_cookie_authenticated_user_can_scan_and_save(client, provider):
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"identifier": provider.profile["email"], "password": "Test password 123!"},
+    )
+    assert login.status_code == 200
+    assert client.cookies.get("scamshield_access")
     response = client.post(
+        "/api/v1/scan/text", json={"text": "Please share your OTP and bank password immediately."}
+    )
+    assert response.status_code == 200
+    assert response.json()["saved"]
+    assert len(provider.scans) == 1
+    assert provider.scans[0]["user_id"] == provider.user_id
+
+
+def test_authenticated_text_scan_falls_back_without_ai(signed_in):
+    response = signed_in.post(
         "/api/v1/scan/text",
         json={"text": "Urgent: Share your OTP and password to verify your suspended bank account."},
     )
     assert response.status_code == 200
     result = response.json()
     assert result["riskLevel"] == "CRITICAL"
-    assert not result["aiUsed"] and not result["saved"]
+    assert not result["aiUsed"] and result["saved"]
     assert result["detectionMethod"] == "RULE_BASED_FALLBACK"
     assert result["fallbackReason"] == "ai_not_configured"
     assert result["confidence"] is None
@@ -66,12 +111,12 @@ def test_disabled_privacy_is_respected(signed_in, provider):
         "https://example.com\\@evil.com",
     ],
 )
-def test_invalid_urls(client, url):
-    assert client.post("/api/v1/scan/url", json={"url": url}).status_code == 422
+def test_invalid_urls(signed_in, url):
+    assert signed_in.post("/api/v1/scan/url", json={"url": url}).status_code == 422
 
 
-def test_url_scanning(client):
-    response = client.post(
+def test_url_scanning(signed_in):
+    response = signed_in.post(
         "/api/v1/scan/url", json={"url": "http://paypal.secure-login.evil.example/verify-account"}
     )
     assert response.status_code == 200
@@ -79,32 +124,32 @@ def test_url_scanning(client):
     assert "never visited" in response.json()["limitations"]
 
 
-def test_invalid_text(client):
+def test_invalid_text(signed_in):
     for text in ["short", " " * 12, "a" * 8001]:
-        assert client.post("/api/v1/scan/text", json={"text": text}).status_code == 422
+        assert signed_in.post("/api/v1/scan/text", json={"text": text}).status_code == 422
 
 
-def test_screenshot_validates_actual_content(client):
+def test_screenshot_validates_actual_content(signed_in):
     assert (
-        client.post(
+        signed_in.post(
             "/api/v1/scan/file", files={"file": ("scam.png", b"<script>bad</script>", "image/png")}
         ).status_code
         == 415
     )
     assert (
-        client.post(
+        signed_in.post(
             "/api/v1/scan/file", files={"file": ("scam.png", image_bytes("GIF"), "image/png")}
         ).status_code
         == 415
     )
     assert (
-        client.post(
+        signed_in.post(
             "/api/v1/scan/file", files={"file": ("scam.png", image_bytes()[:40], "image/png")}
         ).status_code
         == 415
     )
     assert (
-        client.post(
+        signed_in.post(
             "/api/v1/scan/file",
             files={"file": ("big.png", b"a" * (3 * 1024 * 1024 + 1), "image/png")},
         ).status_code
@@ -112,8 +157,8 @@ def test_screenshot_validates_actual_content(client):
     )
 
 
-def test_screenshot_cannot_fabricate_fallback(client):
-    response = client.post(
+def test_screenshot_cannot_fabricate_fallback(signed_in):
+    response = signed_in.post(
         "/api/v1/scan/file", files={"file": ("screen.png", image_bytes(), "image/png")}
     )
     assert response.status_code == 503
@@ -121,7 +166,7 @@ def test_screenshot_cannot_fabricate_fallback(client):
     assert "riskScore" not in response.json()
 
 
-def test_unsupported_image_decoder_is_never_invoked(client, monkeypatch):
+def test_unsupported_image_decoder_is_never_invoked(signed_in, monkeypatch):
     data = image_bytes("BMP")
     Image.init()
     _, accept = Image.OPEN["BMP"]
@@ -130,7 +175,7 @@ def test_unsupported_image_decoder_is_never_invoked(client, monkeypatch):
         pytest.fail("An unsupported image decoder was invoked before rejecting the upload")
 
     monkeypatch.setitem(Image.OPEN, "BMP", (unsupported_decoder, accept))
-    response = client.post(
+    response = signed_in.post(
         "/api/v1/scan/file", files={"file": ("disguised.png", data, "image/png")}
     )
     assert response.status_code == 415
@@ -152,13 +197,13 @@ def assessment(**updates):
 @pytest.mark.parametrize(
     ("format", "mime"), [("PNG", "image/jpeg"), ("JPEG", "image/jpeg"), ("WEBP", "image/webp")]
 )
-def test_successful_screenshot_uses_real_ai_result_and_rules(client, format, mime):
+def test_successful_screenshot_uses_real_ai_result_and_rules(signed_in, format, mime):
     class AI:
         async def analyze(self, *_args):
             return AIOutcome(assessment())
 
-    client.app.dependency_overrides[get_gemini] = lambda: AI()
-    response = client.post(
+    signed_in.app.dependency_overrides[get_gemini] = lambda: AI()
+    response = signed_in.post(
         "/api/v1/scan/file", files={"file": ("screen.png", image_bytes(format), mime)}
     )
     assert response.status_code == 200

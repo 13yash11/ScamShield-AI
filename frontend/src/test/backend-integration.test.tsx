@@ -29,6 +29,27 @@ function mockServer(handler: (path: string, init: RequestInit) => Response | und
 }
 
 describe('Backend integration in the existing interface', () => {
+  it.each(['/scan', '/results'])('requires sign-in before opening %s', async (path) => {
+    const fetch = mockServer(() => undefined);
+    mount(path);
+    expect(await screen.findByRole('heading', { name: 'Sign In to ScamShield' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Suspicious Message Content')).not.toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/scan/'))).toBe(false);
+  });
+
+  it('returns to the scanner after a successful sign-in', async () => {
+    mockServer((path) => path === '/auth/login' ? json({ success: true, user }) : undefined);
+    mount('/scan');
+    const heading = await screen.findByRole('heading', { name: 'Sign In to ScamShield' });
+    expect(heading).toBeInTheDocument();
+    const submit = screen.getAllByRole('button', { name: 'Sign In' }).find((button) => button.getAttribute('type') === 'submit')!;
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.change(screen.getByLabelText(/Email Address or Phone Number/), { target: { value: user.email } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'A long test password!' } });
+    fireEvent.click(submit);
+    expect(await screen.findByLabelText('Suspicious Message Content')).toBeInTheDocument();
+  });
+
   it('redirects an unauthenticated dashboard visitor to sign-in', async () => {
     const fetch = mockServer(() => undefined);
     mount('/dashboard');
@@ -113,9 +134,9 @@ describe('Backend integration in the existing interface', () => {
   });
 
   it('shows the backend fallback result without claiming Gemini was used', async () => {
-    mockServer((path) => path === '/scan/text' ? json({ ...scan, saved: false }) : undefined);
+    mockServer((path) => path === '/auth/me' ? json({ user }) : path === '/scan/text' ? json({ ...scan, saved: false }) : undefined);
     mount('/scan');
-    fireEvent.change(screen.getByLabelText('Suspicious Message Content'), { target: { value: 'Share your OTP and password immediately.' } });
+    fireEvent.change(await screen.findByLabelText('Suspicious Message Content'), { target: { value: 'Share your OTP and password immediately.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Analyze Message' }));
     expect(await screen.findByText('RULE_BASED_FALLBACK')).toBeInTheDocument();
     expect(screen.getByText(scan.limitations)).toBeInTheDocument();
