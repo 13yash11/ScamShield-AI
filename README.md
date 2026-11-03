@@ -55,7 +55,7 @@ backend\.venv\Scripts\python.exe -m pytest -c backend/pytest.ini backend/tests
 backend\.venv\Scripts\python.exe -m ruff check --config backend/pyproject.toml backend/api backend/tests api
 ```
 
-The build output is `frontend/dist/`. Deployment configuration remains at the root. The root `api/index.py` file is only a Vercel entry adapter; backend application code is in `backend/`. Root `requirements.txt` forwards to the backend runtime requirements. See [Vercel deployment](#vercel-deployment) for deployment setup.
+The build output is `frontend/dist/`. Deployment configuration remains at the root. The root `api/index.py` file is only a Vercel entry adapter; backend application code is in `backend/`. Root `requirements.txt` mirrors the backend runtime requirements so Vercel can parse the deployment dependencies directly. See [Vercel deployment](#vercel-deployment) for deployment setup.
 
 ## Project structure
 
@@ -206,7 +206,7 @@ ScamShield-AI-pranav/
 
 `supabase/` contains the unchanged migration, its local PostgreSQL authorization tests, and its setup guide. The actual database and Auth service remain hosted in Supabase.
 
-Shared root files coordinate local commands and deployment. Root `api/` contains only the Vercel adapter (`__init__.py` and `index.py`), which imports `backend/api/index.py`. Root `requirements.txt` forwards to `backend/requirements.txt`. Root `package.json` coordinates the frontend and database npm workspaces, with one shared lockfile and `node_modules/`.
+Shared root files coordinate local commands and deployment. Root `api/` contains only the Vercel adapter (`__init__.py` and `index.py`), which imports `backend/api/index.py`. Root `requirements.txt` mirrors `backend/requirements.txt` for the Vercel build. Root `package.json` coordinates the frontend and database npm workspaces, with one shared lockfile and `node_modules/`.
 
 Generated/local folders omitted from the tree: root `node_modules/`, `.cache/`, `.tools/`, `.git/`, `.vscode/`; frontend `dist/`, `screenshots/`, dependency caches; backend `.venv/`, `.pytest_cache/`, `.ruff_cache/`, and Python `__pycache__/` folders.
 
@@ -218,7 +218,7 @@ The existing React interface is connected to a FastAPI backend. Supabase owns au
 
 ### 1. Prerequisites
 
-- Node.js 22.12+ or 24 and npm.
+- Node.js 24 and npm.
 - Python 3.12+ (the deployment targets 3.12).
 - A free Supabase project for accounts/history.
 - A Google AI Studio free-tier API key for AI and screenshots.
@@ -620,10 +620,10 @@ Use Vercel's free Hobby plan for a permitted personal/college demo. This project
 1. Import the existing repository into [Vercel](https://vercel.com/new).
 2. Use this repository's root as the Root Directory.
 3. Select the **Vite** framework preset. Do not select FastAPI as the whole-project framework; the existing frontend still builds through Vite.
-4. Use Node.js 22 or 24. Install command is `npm ci`, build command is `npm run build`, and output is `frontend/dist`.
+4. Use Node.js 24. Install command is `npm ci`, build command is `npm run build`, and output is `frontend/dist`.
 5. Keep the checked-in `vercel.json` and `.python-version` (Python 3.12).
 
-Application code lives in the three folders: `frontend/`, `backend/`, and `supabase/`. The root npm manifest coordinates the frontend and database-test workspaces. The small root `api/index.py` adapter imports `backend/api/index.py` to follow Vercel's [root API directory convention](https://vercel.com/docs/project-configuration/vercel-json). All backend logic remains under `backend/api/_app/`. Root `requirements.txt` forwards to `backend/requirements.txt` for the Python function build.
+Application code lives in the three folders: `frontend/`, `backend/`, and `supabase/`. The root npm manifest coordinates the frontend and database-test workspaces. The small root `api/index.py` adapter imports `backend/api/index.py` to follow Vercel's [root API directory convention](https://vercel.com/docs/project-configuration/vercel-json). All backend logic remains under `backend/api/_app/`. Root `requirements.txt` mirrors the pins in `backend/requirements.txt` for the Python function build.
 
 Routing in `vercel.json` sends `/api/*` to that function and lets React Router serve other application paths. API 404s stay API responses. Security headers restrict browser scripts/connections to the same origin. Keep frontend and API on the same Vercel domain; no separate backend hostname is needed.
 
@@ -654,7 +654,7 @@ For preview deployments, use a stable preview domain and matching environment/re
 
 ### Serverless limits
 
-The function has a 60-second maximum; Gemini's timeout is shorter. Uploads are capped at 3 MB to leave room for multipart overhead under Vercel's [4.5 MB function payload limit](https://vercel.com/docs/functions/limitations). Screenshots above 16 megapixels are rejected. Runtime dependencies are pinned in `backend/requirements.txt` and included through the root forwarding file. Frontend source, dev tools, node_modules, local Python environments, tests, credentials, and ZIPs are excluded from the function bundle.
+The function has a 60-second maximum; Gemini's timeout is shorter. Uploads are capped at 3 MB to leave room for multipart overhead under Vercel's [4.5 MB function payload limit](https://vercel.com/docs/functions/limitations). Screenshots above 16 megapixels are rejected. Runtime dependencies are pinned in `backend/requirements.txt` and mirrored in the root `requirements.txt`; keep both lists synchronized. Frontend source, dev tools, node_modules, local Python environments, tests, credentials, and ZIPs are excluded from the function bundle.
 
 Rate limiting in this app is bounded and per warm process. It is a practical demo guard, not a shared quota across a serverless deployment. Supabase/Gemini enforce their own limits. Review Vercel's available firewall controls before opening the demo to a wide audience; no paid protection has been configured.
 
