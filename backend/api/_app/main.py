@@ -42,7 +42,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "service": "scamshield-api",
             "supabaseConfigured": settings.supabase_configured,
             "geminiConfigured": bool(settings.gemini_api_key.get_secret_value()),
-            "phoneLoginEnabled": False,
         }
 
     app.include_router(auth.router)

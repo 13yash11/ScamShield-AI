@@ -30,7 +30,6 @@ class FakeSupabase:
             "id": self.user_id,
             "full_name": "Test User",
             "email": "test@example.com",
-            "phone_number": "+919876543210",
             "role": "user",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }

@@ -36,7 +36,7 @@ async def signup(
             json={
                 "email": str(body.email).lower(),
                 "password": body.password.get_secret_value(),
-                "data": {"full_name": body.full_name, "phone_number": body.phone_number},
+                "data": {"full_name": body.full_name},
             },
             params={"redirect_to": settings.app_origin + "/login"},
         )
@@ -75,10 +75,6 @@ async def login(
     db: SupabaseService = Depends(get_supabase),
     settings: Settings = Depends(get_settings),
 ):
-    # Phone ownership is not verified by this project. Every phone receives the
-    # same generic error; no phone-to-email lookup is performed.
-    if "@" not in body.identifier:
-        raise HTTPException(401, LOGIN_ERROR)
     try:
         session = await db.auth(
             "POST",

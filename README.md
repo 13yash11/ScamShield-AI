@@ -183,7 +183,8 @@ ScamShield-AI-pranav/
 │   └── requirements.txt
 ├── supabase/
 │   ├── migrations/
-│   │   └── 20261102063353_initial_scamshield_backend.sql
+│   │   ├── 20261102063353_initial_scamshield_backend.sql
+│   │   └── 20261103063821_remove_account_phone_numbers.sql
 │   ├── tests/
 │   │   └── test-database.mjs
 │   └── package.json
@@ -204,7 +205,7 @@ ScamShield-AI-pranav/
 
 `backend/` contains all server application code, Python configuration/tests, the local `.venv/`, and backend credentials in its ignored `.env` file.
 
-`supabase/` contains the unchanged migration, its local PostgreSQL authorization tests, and its setup guide. The actual database and Auth service remain hosted in Supabase.
+`supabase/` contains versioned migrations and local PostgreSQL upgrade/authorization tests. Setup instructions are in this README. The actual database and Auth service remain hosted in Supabase.
 
 Shared root files coordinate local commands and deployment. Root `api/` contains only the Vercel adapter (`__init__.py` and `index.py`), which imports `backend/api/index.py`. Root `requirements.txt` mirrors `backend/requirements.txt` for the Vercel build. Root `package.json` coordinates the frontend and database npm workspaces, with one shared lockfile and `node_modules/`.
 
@@ -292,7 +293,7 @@ Open `http://localhost:8000/api/health` for API liveness and configuration prese
 
 ### 5. Test the app
 
-1. Register with your name, Indian mobile number, email, and a password of 12–128 characters.
+1. Register with your name, email, and a password of 12–128 characters.
 2. Follow the Supabase confirmation email, then sign in with email/password.
 3. Scan a text message and a URL. Try a screenshot after configuring Gemini.
 4. Check Dashboard and Scan History, view a report, and delete a record.
@@ -323,7 +324,6 @@ Pytest mocks Supabase and Gemini. Frontend tests mock HTTP. The database test ru
 | Origin rejected / 403 | `APP_ORIGIN` must exactly match scheme, hostname, and frontend port. Do not use wildcard CORS. |
 | Screenshot 413 | Use PNG/JPEG/WebP at most 3 MB and 16 megapixels. |
 | Screenshot 503 | Gemini could not read/analyze it. Check key/model/quota or paste the text for rules. |
-| Phone login rejected | Phone ownership verification is pending; use email/password. |
 | Python async tests hang in a managed Windows sandbox | The sandbox may block Python's local event-loop socket pair. Run the mocked test command in a normal local terminal. |
 
 For production setup, continue with [Vercel deployment](#vercel-deployment). The endpoint reference is [API reference](#api-reference).
@@ -343,13 +343,16 @@ Do not use a `service_role`/secret key here. Every database request is made with
 
 ### Apply the SQL migration
 
-Open the project's **SQL Editor**, start a new query, paste the entire file below, and run it once:
+Open the project's **SQL Editor** and apply these migrations in order, running each file once:
 
-`supabase/migrations/20261102063353_initial_scamshield_backend.sql`
+1. `supabase/migrations/20261102063353_initial_scamshield_backend.sql`
+2. `supabase/migrations/20261103063821_remove_account_phone_numbers.sql`
 
-The migration runs in a transaction and creates:
+For an existing installation that has the initial migration, apply only the second file. It removes obsolete account contact columns and metadata while preserving accounts, roles, history, reports, and preferences. Applied migration files remain as immutable history; the current schema is the result of the complete chain.
 
-- `profiles`: names, email, unverified phone contact, trusted role, timestamps.
+The migrations run in transactions. The resulting schema contains:
+
+- `profiles`: names, email, trusted role, timestamps.
 - `scan_history`: redacted references, actual assessments, detection method, timestamps.
 - `scam_reports`: voluntarily submitted descriptions and review status.
 - `user_settings`: privacy and notification preferences.
@@ -357,7 +360,7 @@ The migration runs in a transaction and creates:
 
 Existing email accounts are backfilled with profiles/settings. The migration is intended to run once; it is not a destructive reset script. If these table names already exist in your Supabase project, inspect them before applying it. Do not drop an existing database to resolve a name conflict.
 
-Receiving a confirmation email proves that Supabase Auth is configured; it does not create these application tables. If sign-in reports incomplete database setup, apply this migration in the same project named by `SUPABASE_URL`. Existing confirmed accounts are backfilled, so you do not need to register again. After the query succeeds, allow a few seconds for the API schema cache to refresh, then retry sign-in.
+Receiving a confirmation email proves that Supabase Auth is configured; it does not create these application tables. If sign-in reports incomplete database setup, apply the pending migrations in the same project named by `SUPABASE_URL`. Existing confirmed accounts are backfilled, so you do not need to register again. After the query succeeds, allow a few seconds for the API schema cache to refresh, then retry sign-in.
 
 For a CLI-managed project, link the intended project and run `supabase db push`; the SQL files are standard Supabase migrations. The SQL Editor is sufficient for a beginner.
 
@@ -382,14 +385,6 @@ Email changes go through Supabase Auth and remain pending until its confirmation
 #### Free email limitations
 
 Supabase's built-in email service is for testing, has restrictive delivery/rate limits, and can restrict recipients to authorized team addresses. Check the [official email documentation](https://supabase.com/docs/guides/auth/auth-smtp) for your project. For a free college demo, use an authorized test recipient or local Supabase/Mailpit. Wider production delivery needs an SMTP provider you choose; none is installed or purchased by this project. Do not turn off ownership checks just to demonstrate successful signup.
-
-### Phone policy
-
-The API accepts Indian mobile numbers starting with 6–9, normalizes them to `+91`, and stores them as **unverified contact data**. It does not send SMS or enable phone/password login. Every phone login gets the same generic rejection; there is no phone-to-email lookup.
-
-Unverified numbers are not globally unique because a user can type someone else's number. A partial unique index protects verified numbers, and a trigger prevents another account from newly claiming a number that has already been verified. Changing a phone clears its verification status.
-
-No approved phone verification mechanism is implemented. Do not mark numbers verified based only on a signup form or email confirmation. Phone-based sign-in/recovery remains pending until an ownership-verification process is approved and implemented.
 
 ### Create an administrator
 
@@ -502,8 +497,8 @@ Errors have the form `{"detail":"Readable error message"}`. Validation responses
 
 | Method and path | Request / response |
 | --- | --- |
-| `POST /auth/signup` | `{fullName, email, phoneNumber, password, rePassword}` → 201 `{success, requiresConfirmation, message}`. No automatic login. |
-| `POST /auth/login` | `{identifier, password}` → `{success:true, user}` and session cookies. `identifier` must be email; phone login is pending verification. |
+| `POST /auth/signup` | `{fullName, email, password, rePassword}` → 201 `{success, requiresConfirmation, message}`. No automatic login. |
+| `POST /auth/login` | `{identifier, password}` → `{success:true, user}` and session cookies. `identifier` must be a valid email address. |
 | `GET /auth/me` | Authenticated → `{user}`. |
 | `POST /auth/refresh` | Refresh cookie → rotated session cookies and `{success:true}`. |
 | `POST /auth/logout` | 204. On an upstream failure: 503 with local cookies cleared and a truthful remote-signout warning. |
@@ -511,9 +506,9 @@ Errors have the form `{"detail":"Readable error message"}`. Validation responses
 | `POST /auth/forgot-password` | `{email}` → generic `{success,message}` without revealing account existence. |
 | `POST /auth/reset-password` | `{accessToken,newPassword,confirmPassword}` from the Supabase recovery link → `{success,message}`. Never persist the link token. |
 
-Full names are 2–100 characters, email is validated, passwords are 12–128 characters with matching confirmation. Indian mobile numbers normalize to `+91[6–9]` plus nine digits. Duplicate confirmed emails are rejected, including Supabase's obfuscated duplicate response. Supabase stores password hashes; this app has no password database.
+Full names are 2–100 characters, email is validated, passwords are 12–128 characters with matching confirmation. Duplicate confirmed emails are rejected, including Supabase's obfuscated duplicate response. Supabase stores password hashes; this app has no password database.
 
-`User`: `{id,fullName,email,phoneNumber,role,createdAt}`. Role comes from `profiles`, not user-editable metadata.
+`User`: `{id,fullName,email,role,createdAt}`. Role comes from `profiles`, not user-editable metadata.
 
 ### Scanning
 
@@ -574,7 +569,7 @@ Enable history **before** scanning to retain an authenticated result. Results ge
 
 ```json
 {
-  "profile": { "fullName": "Example User", "email": "user@example.com", "phoneNumber": "+919876543210" },
+  "profile": { "fullName": "Example User", "email": "user@example.com" },
   "notificationPreferences": { "securityNotices": true },
   "privacyPreferences": { "saveHistory": true, "storeContent": false, "useAi": true }
 }
@@ -595,7 +590,7 @@ All `/admin` endpoints require a current database-backed admin role:
 
 ### Health
 
-`GET /api/health` (outside `/api/v1`) → `{status,service,supabaseConfigured,geminiConfigured,phoneLoginEnabled}`. Flags indicate configuration presence; no external probe is performed. `phoneLoginEnabled` is false.
+`GET /api/health` (outside `/api/v1`) → `{status,service,supabaseConfigured,geminiConfigured}`. Flags indicate configuration presence; no external probe is performed.
 
 Request bodies and rate windows are bounded. Default scan rate is 10 requests/minute per client/process; auth POST rate is 15/minute. These are per-process guards, not a distributed serverless rate limiter. Errors never include service credentials or provider debug bodies.
 
@@ -702,7 +697,7 @@ The React application and its configuration now live in `frontend/`. Python sour
 
 Services use same-origin `/api/v1` requests; Vite proxies `/api` to FastAPI locally. Production routes go through a small root `api/index.py` deployment adapter that imports the backend. Root npm commands delegate to the frontend or database-test workspace. Browser settings are in `frontend/.env`; server credentials are in `backend/.env`.
 
-Authentication uses Supabase Auth and server-issued HTTP-only cookies. The old localStorage bearer-token flow is removed. Signup includes `rePassword` and reports email-confirmation requirements. Email/password works after service setup; phone/password login remains pending approved ownership verification.
+Authentication uses Supabase Auth and server-issued HTTP-only cookies. The old localStorage bearer-token flow is removed. Signup includes `rePassword` and reports email-confirmation requirements. Email/password works after service setup.
 
 Text/URL/file scan endpoint names and camelCase result fields are preserved. Risk levels include `CRITICAL`. Results also identify whether AI ran, whether fallback was used, and whether history was actually saved.
 
@@ -726,7 +721,7 @@ The existing React/Vite components, styling, navigation, and request/response na
 - Keep camelCase JSON contracts. Add CRITICAL as the fourth risk level.
 - Supabase Auth owns passwords; no custom password table or service-role key is needed by the application. All database calls use the caller's JWT and RLS.
 - HTTP-only, SameSite cookies hold access/refresh tokens. Require trusted origins for cookie-authenticated writes. The React client refreshes once after a 401. Support modules live in `backend/api/_app/` so Vercel discovers only one function.
-- Email confirmation is supported. Phone numbers are unverified contact data; phone login is pending an approved ownership-verification mechanism.
+- Email confirmation and email/password authentication are supported.
 - All scans require an active authenticated session. Privacy settings control whether redacted references/assessment fields are saved; screenshots are never retained.
 - URLs are parsed, never fetched. No live reputation, redirect, or statistical-probability claims.
 - The user connected Supabase after initial implementation. The application migration is now applied to the existing ScamShield-AI project, with profile/settings backfill and live session/access checks verified. A live Gemini structured text response has also been verified after correcting its request schema. Vercel deployment remains unverified; automated tests mock external APIs.
@@ -766,7 +761,7 @@ The Python test run reports one upstream Starlette warning about future TestClie
 - Stored-content minimization, privacy preferences, no fake saved-success on database failures, and partial preference update preservation.
 - Origin restrictions, production cookie flags, rate limits, and no DNS/network calls from passive URL analysis.
 - Frontend sign-in failure, route protection, API-loaded dashboard/history, deletion failure preservation, settings contracts, admin access/data, fallback display, and one refresh for concurrent expired requests.
-- SQL trigger synchronization, metadata-role rejection, profile update privilege denial, per-user RLS, administrator access, verified-phone collision handling, and logged-out-session denial.
+- SQL trigger synchronization, metadata-role rejection, profile update privilege denial, per-user RLS, administrator access, email uniqueness, and logged-out-session denial.
 
 ### Phase completion record
 
@@ -800,7 +795,7 @@ The configured Gemini key/model were accessible, but the original `response_sche
 
 Regression tests reproduce the rejected legacy payload and verify the corrected real SDK serialization for both text and image inputs over mocked HTTP. A separate live request with synthetic scam text succeeded, and the application's result builder produced `HYBRID_GEMINI_RULES` with `aiUsed: true` and a null fallback reason. No user content or credentials were printed, and no saved scan records were rewritten. Restart the backend and create a fresh scan to see the corrected method.
 
-Phone ownership verification/login and optional notification delivery are explicitly pending. Notification preferences are stored without pretending to send notices. Per-process rate limiting is a demo guard rather than a distributed deployment-wide quota.
+Optional notification delivery is explicitly pending. Notification preferences are stored without pretending to send notices. Per-process rate limiting is a demo guard rather than a distributed deployment-wide quota.
 
 ### Whole-project review — November 2, 2026
 
@@ -867,7 +862,7 @@ The user confirmed saving the production Supabase URL Configuration:
 - Site URL: `https://scamshield-ai-murex.vercel.app/login`
 - Allowed redirects: `https://scamshield-ai-murex.vercel.app/login` and `https://scamshield-ai-murex.vercel.app/reset-password`, keeping the existing localhost entries.
 
-The connected Supabase tools do not expose Auth URL configuration, so that dashboard change was confirmed by the user rather than read back through the tools. A real-user password sign-in, saved-history round trip, and email confirmation/reset delivery were not replayed by the deployment checks. The earlier pending phone verification, optional notification delivery, and placeholder policy links remain as recorded above.
+The connected Supabase tools do not expose Auth URL configuration, so that dashboard change was confirmed by the user rather than read back through the tools. A real-user password sign-in, saved-history round trip, and email confirmation/reset delivery were not replayed by the deployment checks. Optional notification delivery and placeholder policy links remain as recorded above.
 
 ### Sign-in required for every scan — November 3, 2026
 
@@ -876,3 +871,12 @@ All text, URL, and screenshot analysis now requires a confirmed account and an a
 The existing session validation, privacy preferences, Gemini/rules behavior, risk scoring, and database schema remain in use. Saving history can still be disabled for an authenticated scan. No database migration is required.
 
 Verification for this change: 79 backend tests passed, including nine rejection cases across all three scan types and a login-cookie-to-saved-scan test; 21 frontend tests passed, including scanner/results protection and return-to-scanner navigation after login. Python lint and the TypeScript/Vite production build passed. External Auth and AI services are mocked in the automated suite.
+
+
+### Email-only account update — November 3, 2026
+
+Signup requires a full name, email address, password, and password confirmation. Sign-in accepts an email address and password. Account settings edit only the full name and email address. API account responses contain no contact-number field, and email confirmation and password recovery continue through Supabase Auth.
+
+The follow-up migration removes the former account contact columns, index, guard function/trigger, and obsolete Auth metadata. It replaces the profile synchronization function and retains automatic profile update timestamps. The already applied initial migration stays intact for reproducible upgrades.
+
+Local validation for this update: 84 backend tests, 23 frontend tests, and 33 PostgreSQL upgrade/authorization checks passed. Python linting and the frontend production build passed.

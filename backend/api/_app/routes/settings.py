@@ -50,7 +50,7 @@ async def update_settings(
     message = "Settings saved."
     if body.profile:
         profile = body.profile
-        data = {"data": {"full_name": profile.full_name, "phone_number": profile.phone_number}}
+        data = {"data": {"full_name": profile.full_name}}
         if str(profile.email).lower() != auth.user.email.lower():
             data["email"] = str(profile.email).lower()
             message = "Profile saved. Confirm the email change using the links sent by Supabase."
@@ -60,11 +60,11 @@ async def update_settings(
             if exc.status >= 500:
                 raise HTTPException(
                     503,
-                    "Profile update could not finish. Check Supabase configuration and verified phone uniqueness.",
+                    "Profile update could not finish. Check Supabase email and database configuration.",
                 ) from None
             raise HTTPException(
                 400,
-                "Profile update rejected. The email or verified phone may already be registered.",
+                "Profile update rejected. The email may already be registered.",
             ) from None
         profiles = await db.table(
             "GET",
@@ -72,15 +72,13 @@ async def update_settings(
             auth.token,
             params={
                 "id": f"eq.{auth.user.id}",
-                "select": "id,full_name,email,phone_number,role,created_at",
+                "select": "id,full_name,email,role,created_at",
                 "limit": "1",
             },
         )
         if not profiles:
             raise HTTPException(503, "Profile could not be loaded after the update.")
-        auth.user = auth.user.model_validate(
-            {**profiles[0], "phone_number": profiles[0].get("phone_number") or ""}
-        )
+        auth.user = auth.user.model_validate(profiles[0])
     settings = await load_settings(db, auth)
     settings.message = message
     return settings

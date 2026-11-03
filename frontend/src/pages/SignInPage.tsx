@@ -46,7 +46,9 @@ export const SignInPage: React.FC = () => {
     const errors: Partial<Record<keyof AuthCredentials, string>> = {};
 
     if (!credentials.identifier.trim()) {
-      errors.identifier = 'Email address or phone number is required.';
+      errors.identifier = 'Email address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(credentials.identifier.trim())) {
+      errors.identifier = 'Please enter a valid email address.';
     }
 
     if (!credentials.password) {
@@ -95,12 +97,11 @@ export const SignInPage: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <Input
-            label="Email Address or Phone Number"
-            type="text"
+            label="Email Address"
+            type="email"
             required
             autoComplete="username"
-            placeholder="name@domain.com or phone"
-            helperText="Use your email address. Phone login is pending ownership verification."
+            placeholder="name@domain.com"
             value={credentials.identifier}
             onChange={(e) => handleChange('identifier', e.target.value)}
             error={fieldErrors.identifier}

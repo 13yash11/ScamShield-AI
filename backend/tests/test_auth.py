@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from .conftest import PASSWORD
@@ -5,16 +7,31 @@ from .conftest import PASSWORD
 SIGNUP = {
     "fullName": "Test User",
     "email": "test@example.com",
-    "phoneNumber": "9876543210",
     "password": PASSWORD,
     "rePassword": PASSWORD,
 }
 
 
-def test_signup_success_requires_confirmation(client):
+def test_signup_success_requires_confirmation(client, provider, monkeypatch):
+    original = provider.handle
+    signup_requests = []
+
+    def capture_signup(request):
+        if request.url.path == "/auth/v1/signup":
+            signup_requests.append(json.loads(request.content))
+        return original(request)
+
+    monkeypatch.setattr(provider, "handle", capture_signup)
     response = client.post("/api/v1/auth/signup", json=SIGNUP)
     assert response.status_code == 201
     assert response.json()["requiresConfirmation"]
+    assert signup_requests == [
+        {
+            "email": SIGNUP["email"],
+            "password": PASSWORD,
+            "data": {"full_name": SIGNUP["fullName"]},
+        }
+    ]
     assert "password" not in response.text.lower()
     assert "scamshield_access" not in client.cookies
 
@@ -75,16 +92,25 @@ def test_login_sets_http_only_cookies_and_me(client):
     assert client.post("/api/v1/auth/refresh").status_code == 200
 
 
-def test_wrong_password_and_phone_are_generic(client, provider):
+def test_wrong_password_and_unknown_email_are_generic(client):
     wrong = client.post(
         "/api/v1/auth/login", json={"identifier": "test@example.com", "password": "wrong"}
     )
-    for phone in ["9876543210", "+919123456789"]:
-        response = client.post(
-            "/api/v1/auth/login", json={"identifier": phone, "password": PASSWORD}
-        )
-        assert response.status_code == wrong.status_code == 401
-        assert response.json() == wrong.json()
+    unknown = client.post(
+        "/api/v1/auth/login", json={"identifier": "unknown@example.com", "password": PASSWORD}
+    )
+    assert unknown.status_code == wrong.status_code == 401
+    assert unknown.json() == wrong.json() == {"detail": "Invalid email or password."}
+    assert not client.cookies
+
+
+@pytest.mark.parametrize("identifier", ["9876543210", "not-an-email"])
+def test_login_requires_valid_email_before_contacting_provider(client, provider, identifier):
+    response = client.post(
+        "/api/v1/auth/login", json={"identifier": identifier, "password": PASSWORD}
+    )
+    assert response.status_code == 422
+    assert provider.calls == []
     assert not client.cookies
 
 
@@ -128,7 +154,6 @@ def test_settings_update_and_role_injection(signed_in):
             "profile": {
                 "fullName": "Updated Name",
                 "email": "test@example.com",
-                "phoneNumber": "9876543210",
             }
         },
     )
@@ -140,7 +165,6 @@ def test_settings_update_and_role_injection(signed_in):
             "profile": {
                 "fullName": "Admin",
                 "email": "test@example.com",
-                "phoneNumber": "9876543210",
                 "role": "admin",
             }
         },
@@ -205,3 +229,26 @@ def test_logout_provider_failure_still_clears_cookies(client, provider):
     response = client.post("/api/v1/auth/logout")
     assert response.status_code == 503
     assert not client.cookies
+
+
+@pytest.mark.parametrize("field", ["phoneNumber", "phone_number"])
+def test_removed_contact_field_is_rejected_on_signup_and_profile(signed_in, provider, field):
+    response = signed_in.post("/api/v1/auth/signup", json={**SIGNUP, field: "+919876543210"})
+    assert response.status_code == 422
+    response = signed_in.patch(
+        "/api/v1/settings",
+        json={
+            "profile": {"fullName": "Test User", "email": SIGNUP["email"], field: "+919876543210"}
+        },
+    )
+    assert response.status_code == 422
+    assert ("POST", "/auth/v1/signup") not in provider.calls
+    assert ("PUT", "/auth/v1/user") not in provider.calls
+
+
+def test_account_responses_have_only_email_profile_fields(signed_in, provider):
+    provider.admin = True
+    expected = {"id", "fullName", "email", "role", "createdAt"}
+    assert set(signed_in.get("/api/v1/auth/me").json()["user"]) == expected
+    assert set(signed_in.get("/api/v1/settings").json()["user"]) == expected
+    assert set(signed_in.get("/api/v1/admin/users").json()[0]) == expected

@@ -36,15 +36,13 @@ async def users(
         "profiles",
         auth.token,
         params={
-            "select": "id,full_name,email,phone_number,role,created_at",
+            "select": "id,full_name,email,role,created_at",
             "order": "created_at.desc,id.desc",
             "limit": str(limit),
             "offset": str(offset),
         },
     )
-    return [
-        User.model_validate({**row, "phone_number": row.get("phone_number") or ""}) for row in rows
-    ]
+    return [User.model_validate(row) for row in rows]
 
 
 @router.get("/reports")

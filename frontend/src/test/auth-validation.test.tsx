@@ -6,7 +6,7 @@ import { SignInPage } from '../pages/SignInPage';
 import { AuthProvider } from '../context/AuthContext';
 
 describe('Authentication Form Validation & Policies', () => {
-  it('enforces 5 required fields and 12-char password policy on signup', async () => {
+  it('enforces 4 required fields and 12-char password policy on signup', async () => {
     render(
       <MemoryRouter>
         <AuthProvider>
@@ -15,9 +15,9 @@ describe('Authentication Form Validation & Policies', () => {
       </MemoryRouter>
     );
 
-    // Verify all 5 required fields are present
+    // Verify all required fields are present
     expect(screen.getByLabelText(/Full Name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Phone Number/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Phone Number/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Password/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Re-enter Password/i)).toBeInTheDocument();
@@ -32,7 +32,6 @@ describe('Authentication Form Validation & Policies', () => {
 
     // Fill short password (<12 characters)
     fireEvent.change(screen.getByLabelText(/Full Name/i), { target: { value: 'Alex Security' } });
-    fireEvent.change(screen.getByLabelText(/Phone Number/i), { target: { value: '+919876543210' } });
     fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: 'alex@example.com' } });
     fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'shortpass' } });
     fireEvent.change(screen.getByLabelText(/Re-enter Password/i), { target: { value: 'shortpass' } });
@@ -61,7 +60,7 @@ describe('Authentication Form Validation & Policies', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByLabelText(/Email Address or Phone Number/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Password/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Forgot Password\?/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Create Account/i })).toBeInTheDocument();
@@ -71,7 +70,7 @@ describe('Authentication Form Validation & Policies', () => {
     fireEvent.click(signInBtn);
 
     expect(
-      await screen.findByText(/Email address or phone number is required\./i)
+      await screen.findByText(/Email address is required\./i)
     ).toBeInTheDocument();
   });
 });

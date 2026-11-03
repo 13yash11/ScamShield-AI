@@ -14,7 +14,6 @@ export const SignUpPage: React.FC = () => {
 
   const [formData, setFormData] = useState<SignUpData>({
     fullName: '',
-    phoneNumber: '',
     email: '',
     password: '',
     rePassword: '',
@@ -23,18 +22,6 @@ export const SignUpPage: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof SignUpData, string>>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-
-  // Phone number formatter
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/[^\d+]/g, '');
-    if (value.length > 15) {
-      value = value.slice(0, 15);
-    }
-    setFormData((prev) => ({ ...prev, phoneNumber: value }));
-    if (fieldErrors.phoneNumber) {
-      setFieldErrors((prev) => ({ ...prev, phoneNumber: undefined }));
-    }
-  };
 
   const handleChange = (field: keyof SignUpData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -53,12 +40,6 @@ export const SignUpPage: React.FC = () => {
       errors.fullName = 'Full Name is required.';
     } else if (formData.fullName.trim().length < 2) {
       errors.fullName = 'Full Name must be at least 2 characters.';
-    }
-
-    if (!formData.phoneNumber.trim()) {
-      errors.phoneNumber = 'Phone Number is required.';
-    } else if (!/^(?:\+91)?[6-9]\d{9}$/.test(formData.phoneNumber.trim())) {
-      errors.phoneNumber = 'Enter a valid Indian mobile number: 10 digits starting with 6–9, optionally prefixed with +91.';
     }
 
     if (!formData.email.trim()) {
@@ -144,21 +125,7 @@ export const SignUpPage: React.FC = () => {
             disabled={isLoading}
           />
 
-          {/* 2. Phone Number */}
-          <Input
-            label="Phone Number"
-            type="tel"
-            required
-            autoComplete="tel"
-            placeholder="+91 9876543210"
-            value={formData.phoneNumber}
-            onChange={handlePhoneChange}
-            error={fieldErrors.phoneNumber}
-            helperText="Indian mobile number. Phone login is pending ownership verification."
-            disabled={isLoading}
-          />
-
-          {/* 3. Email Address */}
+          {/* 2. Email Address */}
           <Input
             label="Email Address"
             type="email"
@@ -171,7 +138,7 @@ export const SignUpPage: React.FC = () => {
             disabled={isLoading}
           />
 
-          {/* 4. Password */}
+          {/* 3. Password */}
           <PasswordInput
             label="Password"
             required
@@ -184,7 +151,7 @@ export const SignUpPage: React.FC = () => {
             disabled={isLoading}
           />
 
-          {/* 5. Re-enter Password */}
+          {/* 4. Re-enter Password */}
           <PasswordInput
             label="Re-enter Password"
             required

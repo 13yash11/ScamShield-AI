@@ -19,7 +19,6 @@ export const SettingsPage: React.FC = () => {
   // Profile Form state
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber || '');
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
@@ -42,7 +41,6 @@ export const SettingsPage: React.FC = () => {
       if (!active) return;
       setFullName(settings.user.fullName);
       setEmail(settings.user.email);
-      setPhoneNumber(settings.user.phoneNumber);
       setPrivacy(settings.privacyPreferences);
       setSecurityNotices(settings.notificationPreferences.securityNotices);
     }).catch((err) => { if (active) setSettingsError(err instanceof Error ? err.message : 'Could not load settings.'); })
@@ -79,7 +77,7 @@ export const SettingsPage: React.FC = () => {
 
     setIsUpdatingProfile(true);
     try {
-      const settings = await apiService.updateSettings({ profile: { fullName, email, phoneNumber } });
+      const settings = await apiService.updateSettings({ profile: { fullName, email } });
       await refreshUser();
       setEmail(settings.user.email);
       setProfileMessage({ type: 'success', text: settings.message || 'Profile saved.' });
@@ -185,16 +183,6 @@ export const SettingsPage: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="name@domain.com"
-              required
-            />
-
-            <Input
-              label="Phone Number"
-              type="tel"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-              placeholder="+91 9876543210"
-              helperText="Unverified contact number. Phone login and phone recovery are pending verification."
               required
             />
 

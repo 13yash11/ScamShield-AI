@@ -8,9 +8,7 @@ from .config import Settings
 
 ACCESS_COOKIE = "scamshield_access"
 REFRESH_COOKIE = "scamshield_refresh"
-LOGIN_ERROR = (
-    "Invalid email or password. Use email login; phone login is pending ownership verification."
-)
+LOGIN_ERROR = "Invalid email or password."
 
 
 @dataclass
@@ -75,14 +73,13 @@ async def resolve_user(token: str, db: SupabaseService) -> AuthenticatedUser:
         token,
         params={
             "id": f"eq.{identity['id']}",
-            "select": "id,full_name,email,phone_number,role,created_at",
+            "select": "id,full_name,email,role,created_at",
             "limit": "1",
         },
     )
     if not profiles:
         raise HTTPException(503, "User profile is missing. Check the database migration.")
     profile = dict(profiles[0])
-    profile["phone_number"] = profile.get("phone_number") or ""
     return AuthenticatedUser(User.model_validate(profile), token)
 
 

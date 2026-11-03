@@ -7,7 +7,7 @@ import { apiService } from '../services/api';
 import { authService } from '../services/auth';
 import { ScanResult, User, UserSettings } from '../types';
 
-const user: User = { id: 'user-test', fullName: 'Test Analyst', email: 'test@example.com', phoneNumber: '+919876543210', role: 'user', createdAt: '2026-11-01T00:00:00Z' };
+const user: User = { id: 'user-test', fullName: 'Test Analyst', email: 'test@example.com', role: 'user', createdAt: '2026-11-01T00:00:00Z' };
 const scan: ScanResult = {
   id: 'scan-test', scanType: 'text', target: 'Text submission (SHA-256: test)', riskLevel: 'CRITICAL', riskScore: 90,
   summary: 'A contextual request for sensitive credentials.', warningSigns: ['OTP and password requested together'], explanation: 'Combined warning signs.', recommendations: ['Verify the sender independently.'], detectionMethod: 'RULE_BASED_FALLBACK', limitations: 'Gemini was not used. Scores are heuristic.', aiUsed: false, saved: true, createdAt: '2026-11-01T00:00:00Z',
@@ -29,6 +29,38 @@ function mockServer(handler: (path: string, init: RequestInit) => Response | und
 }
 
 describe('Backend integration in the existing interface', () => {
+  it('registers using only name, email, and password confirmation', async () => {
+    const fetch = mockServer((path) => path === '/auth/signup' ? json({ success: true, message: 'Confirm your email.' }, 201) : undefined);
+    mount('/signup');
+    const submit = await screen.findByRole('button', { name: 'Create Account' });
+    await waitFor(() => expect(submit).toBeEnabled());
+    expect(screen.queryByLabelText(/Phone Number/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Full Name/), { target: { value: user.fullName } });
+    fireEvent.change(screen.getByLabelText(/Email Address/), { target: { value: user.email } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'A long test password!' } });
+    fireEvent.change(screen.getByLabelText(/Re-enter Password/), { target: { value: 'A long test password!' } });
+    fireEvent.click(submit);
+    expect(await screen.findByText('Confirm your email.')).toBeInTheDocument();
+    const request = fetch.mock.calls.find(([url]) => String(url).endsWith('/auth/signup'));
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      fullName: user.fullName, email: user.email, password: 'A long test password!', rePassword: 'A long test password!',
+    });
+  });
+
+  it('requires a valid email address before submitting sign-in', async () => {
+    const fetch = mockServer(() => undefined);
+    mount('/login');
+    const input = await screen.findByLabelText(/Email Address/);
+    expect(input).toHaveAttribute('type', 'email');
+    const submit = screen.getAllByRole('button', { name: 'Sign In' }).find((button) => button.getAttribute('type') === 'submit')!;
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.change(input, { target: { value: 'not-an-email' } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'A long test password!' } });
+    fireEvent.click(submit);
+    expect(await screen.findByText('Please enter a valid email address.')).toBeInTheDocument();
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/auth/login'))).toBe(false);
+  });
+
   it.each(['/scan', '/results'])('requires sign-in before opening %s', async (path) => {
     const fetch = mockServer(() => undefined);
     mount(path);
@@ -44,7 +76,7 @@ describe('Backend integration in the existing interface', () => {
     expect(heading).toBeInTheDocument();
     const submit = screen.getAllByRole('button', { name: 'Sign In' }).find((button) => button.getAttribute('type') === 'submit')!;
     await waitFor(() => expect(submit).toBeEnabled());
-    fireEvent.change(screen.getByLabelText(/Email Address or Phone Number/), { target: { value: user.email } });
+    fireEvent.change(screen.getByLabelText(/Email Address/), { target: { value: user.email } });
     fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'A long test password!' } });
     fireEvent.click(submit);
     expect(await screen.findByLabelText('Suspicious Message Content')).toBeInTheDocument();
@@ -63,7 +95,7 @@ describe('Backend integration in the existing interface', () => {
     mount('/login');
     const submit = screen.getAllByRole('button', { name: 'Sign In' }).find((button) => button.getAttribute('type') === 'submit')!;
     await waitFor(() => expect(submit).toBeEnabled());
-    fireEvent.change(screen.getByLabelText(/Email Address or Phone Number/), { target: { value: user.email } });
+    fireEvent.change(screen.getByLabelText(/Email Address/), { target: { value: user.email } });
     fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: 'incorrect-password' } });
     fireEvent.click(submit);
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.');
@@ -107,7 +139,8 @@ describe('Backend integration in the existing interface', () => {
     expect(await screen.findByText('Settings saved.')).toBeInTheDocument();
     const profileRequest = fetch.mock.calls.find(([url, init]) => String(url).endsWith('/settings') && String(init?.body).includes('Updated Analyst'));
     expect(profileRequest?.[1]?.credentials).toBe('include');
-    expect(JSON.parse(String(profileRequest?.[1]?.body)).profile.fullName).toBe('Updated Analyst');
+    expect(JSON.parse(String(profileRequest?.[1]?.body))).toEqual({ profile: { fullName: 'Updated Analyst', email: user.email } });
+    expect(screen.queryByLabelText(/Phone Number/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Save future scans to my account history'));
     fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
     await waitFor(() => expect(fetch.mock.calls.some(([, init]) => String(init?.body).includes('"saveHistory":false'))).toBe(true));
@@ -160,7 +193,7 @@ describe('Backend integration in the existing interface', () => {
 
   it('sends password confirmation and rejects malformed authentication success', async () => {
     const fetch = mockServer((path) => path === '/auth/signup' ? json({ success: true, message: 'Confirm your email.' }, 201) : path === '/auth/login' ? json({ success: true }) : undefined);
-    const signup = await authService.signUp({ fullName: user.fullName, email: user.email, phoneNumber: user.phoneNumber, password: 'A long test password!', rePassword: 'A long test password!' });
+    const signup = await authService.signUp({ fullName: user.fullName, email: user.email, password: 'A long test password!', rePassword: 'A long test password!' });
     expect(signup.message).toBe('Confirm your email.');
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body)).rePassword).toBe('A long test password!');
     expect((await authService.login({ identifier: user.email, password: 'A long test password!' })).success).toBe(false);

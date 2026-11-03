@@ -6,19 +6,17 @@ export interface User {
   id: string;
   fullName: string;
   email: string;
-  phoneNumber: string;
   role: 'user' | 'admin';
   createdAt: string;
 }
 
 export interface AuthCredentials {
-  identifier: string; // Email or Phone
+  identifier: string; // Email address
   password: string;
 }
 
 export interface SignUpData {
   fullName: string;
-  phoneNumber: string;
   email: string;
   password: string;
   rePassword: string;
@@ -94,7 +92,7 @@ export interface UserSettings {
 }
 
 export interface SettingsPatch {
-  profile?: Pick<User, 'fullName' | 'email' | 'phoneNumber'>;
+  profile?: Pick<User, 'fullName' | 'email'>;
   notificationPreferences?: NotificationPreferences;
   privacyPreferences?: PrivacyPreferences;
 }
