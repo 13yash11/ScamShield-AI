@@ -1,0 +1,9 @@
+{
+  "name": "scamshield-database",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "test": "node tests/test-database.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "^0.5.14" },
+  "engines": { "node": ">=22.12.0" }
+}

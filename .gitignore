@@ -10,6 +10,8 @@ dist-ssr
 
 # Environment variables
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -35,3 +37,18 @@ pnpm-debug.log*
 lerna-debug.log*
 screenshots/
 *.log
+
+# Python and local tooling
+.venv/
+.tools/
+.cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.vercel/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
